@@ -16,7 +16,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "express": "^4.19.2",
-    "googleapis": "^164.1.0",
+    "googleapis": "^185.0.0",
     "json2csv": "^6.0.0-alpha.2",
     "open": "^10.2.0"
   },
