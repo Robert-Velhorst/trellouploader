@@ -16,4 +16,4 @@ Harassment, discrimination, threats, deliberate intimidation, personal attacks, 
 Project maintainers may edit or remove contributions and may temporarily or permanently restrict participation when this Code is violated. They will consider the nature and impact of the conduct.
 
 ## Reporting
-Report a conduct concern privately to the repository maintainer through GitHub. Avoid putting personal or sensitive details in a public issue. For security vulnerabilities, use the repository's private vulnerability reporting feature when available.
+Report a conduct concern privately by emailing noodzakelijkonline@gmail.com. Avoid putting personal or sensitive details in a public issue. For security vulnerabilities, use the repository's private vulnerability reporting feature when available.
