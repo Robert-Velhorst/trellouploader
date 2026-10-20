@@ -21,7 +21,7 @@
     "open": "11.0.4"
   },
   "devDependencies": {},
-  "packageManager": "npm@12.2.0",
+  "packageManager": "npm@12.2.1",
   "engines": {
     "node": "^24.22.0 || ^26.12.0"
   }
