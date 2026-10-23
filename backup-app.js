@@ -40,6 +40,19 @@ export function createBackupApp({ password, publicOrigin, runBackup, background 
     req.session = sessions.get(key);
     next();
   }
+  function verifyCsrfToken(expected, supplied) {
+    if (typeof expected !== 'string' || typeof supplied !== 'string') return false;
+    const left = Buffer.from(expected), right = Buffer.from(supplied);
+    return left.length === right.length && timingSafeEqual(left, right);
+  }
+  function protectCsrf(req, res, next) {
+    // Keep the session/header boundary explicit for review and static analysis.
+    // csrf-sync also validates the session token through its middleware.
+    if (!verifyCsrfToken(req.session.csrfToken, req.get('X-CSRF-Token'))) {
+      return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+    csrfSynchronisedProtection(req, res, next);
+  }
   function requireIntent(req, res, next) {
     if (!sameOrigin(req) || req.get('X-Backup-Request') !== '1') return res.status(403).json({ error: 'Explicit same-origin backup request required' });
     next();
@@ -59,13 +72,13 @@ export function createBackupApp({ password, publicOrigin, runBackup, background 
     res.cookie(SESSION_COOKIE, token, { ...cookieOptions, maxAge: sessionTtlMs });
     res.json({ authenticated: true, csrfToken: generateToken(req) });
   });
-  app.post('/api/logout', requireAuth, csrfSynchronisedProtection, requireIntent, (req, res) => {
+  app.post('/api/logout', requireAuth, protectCsrf, requireIntent, (req, res) => {
     sessions.delete(req.backupSessionKey);
     res.clearCookie(SESSION_COOKIE, cookieOptions);
     res.sendStatus(204);
   });
   app.get('/api/backup', requireAuth, (_req, res) => res.set('Allow', 'POST').status(405).json({ error: 'Use POST with X-Backup-Request: 1' }));
-  app.post('/api/backup', requireAuth, csrfSynchronisedProtection, requireIntent, async (req, res) => {
+  app.post('/api/backup', requireAuth, protectCsrf, requireIntent, async (req, res) => {
     if (active) return res.status(409).json({ error: 'A backup is already running' });
     while (jobs.size >= 20) jobs.delete(jobs.keys().next().value);
     const id = randomUUID(), job = { owner: req.backupSessionKey, status: 'running' };
