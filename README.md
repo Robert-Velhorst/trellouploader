@@ -23,17 +23,18 @@ remove historical Git data or establish whether any old credential was used live
 ## API migration
 
 - `POST /api/login` accepts JSON with a `password` string. Successful login sets
-  an opaque eight-hour session cookie and returns `{"authenticated":true}`.
+  an opaque eight-hour session cookie and returns `authenticated: true` plus a
+  session-bound `csrfToken`. Password verification uses salted scrypt (N=32768, r=8, p=3).
   Login attempts are limited to five per minute. Sessions are process-local,
   capped at 20, and invalidated by logout, expiry or restart.
-- `POST /api/backup` requires that session and `X-Backup-Request: 1`. Browser
+- `POST /api/backup` requires that session, `X-Backup-Request: 1`, and the login response token in `X-CSRF-Token`. Browser
   Origin must match `PUBLIC_URL`; non-browser clients may omit Origin. The legacy
   GET operation returns 405 after authentication and never starts a backup.
 - Only one backup may run at a time. A competing request returns 409.
 - `GET /api/backup/:jobId` returns only the initiating session's job state.
   States are `running`, `completed` and `failed`; completed jobs include the
   private Drive URL. Up to 20 job records remain in memory.
-- `POST /api/logout` requires the session and `X-Backup-Request: 1`, revokes the
+- `POST /api/logout` requires the session, `X-Backup-Request: 1` and `X-CSRF-Token`, revokes the
   session and clears its cookie.
 
 This service retains background execution. Starting work returns HTTP 202 with

@@ -21,7 +21,8 @@
     "googleapis": "188.0.0",
     "open": "11.0.4",
     "@json2csv/plainjs": "7.0.8",
-    "express-rate-limit": "8.7.1"
+    "express-rate-limit": "8.7.1",
+    "csrf-sync": "4.2.1"
   },
   "devDependencies": {},
   "packageManager": "npm@12.2.1",

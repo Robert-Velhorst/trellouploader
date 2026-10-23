@@ -9,12 +9,14 @@ const intent = { 'X-Backup-Request': '1', Origin: origin };
 
 async function fixture(t, overrides = {}) {
   let calls = 0;
+  const csrfTokens = new Map();
   const app = createBackupApp({ password, publicOrigin: origin, runBackup: async () => { calls++; return link; }, ...overrides });
   const server = await new Promise(resolve => { const server = app.listen(0, '127.0.0.1', () => resolve(server)); });
   t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
   async function request(path, { method = 'GET', body, headers = {} } = {}) {
     const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
-      method, headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
+      method, headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(csrfTokens.has(headers.Cookie) ? { 'X-CSRF-Token': csrfTokens.get(headers.Cookie) } : {}), ...headers },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(5000),
     });
     const text = await response.text();
@@ -25,7 +27,7 @@ async function fixture(t, overrides = {}) {
     const response = await request('/api/login', { method: 'POST', body: { password } });
     assert.equal(response.status, 200);
     const cookie = response.headers.getSetCookie().find(value => value.startsWith(`${SESSION_COOKIE}=`));
-    assert.ok(cookie); return { cookie: cookie.split(';')[0], response, setCookie: cookie };
+    assert.ok(cookie); csrfTokens.set(cookie.split(';')[0], response.data.csrfToken); return { cookie: cookie.split(';')[0], response, setCookie: cookie };
   }
   return { request, login, calls: () => calls };
 }
@@ -132,4 +134,18 @@ test('malformed and oversized JSON do not reveal input values', async t => {
   const result = await f.request('/api/login', { method: 'POST', body: { password: 'x'.repeat(5000) } });
   assert.equal(result.status, 413); assert.equal(result.data.error, 'Request too large');
   assert.doesNotMatch(JSON.stringify(result.data), /xxxxx/);
+});
+
+
+test('mutating requests require the initiating session CSRF token', async t => {
+  const f = await fixture(t), first = await f.login(), second = await f.login();
+  for (const token of ['', 'invalid-token', second.response.data.csrfToken]) {
+    for (const path of ['/api/backup', '/api/logout']) {
+      const response = await f.request(path, { method: 'POST', headers: { Cookie: first.cookie, ...intent, 'X-CSRF-Token': token } });
+      assert.equal(response.status, 403);
+    }
+  }
+  assert.equal(f.calls(), 0);
+  assert.equal((await f.request('/api/backup', { method: 'POST', headers: { Cookie: first.cookie, ...intent } })).status, 200);
+  assert.equal(f.calls(), 1);
 });
