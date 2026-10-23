@@ -58,6 +58,7 @@ export function createBackupApp({ password, publicOrigin, runBackup, background 
     next();
   }
   const loginLimit = rateLimit({ windowMs: 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+  const mutationLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
   app.post('/api/login', loginLimit, async (req, res) => {
     if (!sameOrigin(req)) return res.status(403).json({ error: 'Origin not permitted' });
     if (typeof req.body?.password !== 'string' || !timingSafeEqual(await derivePassword(req.body.password, passwordSalt, 64, passwordOptions), passwordHash)) {
@@ -72,13 +73,13 @@ export function createBackupApp({ password, publicOrigin, runBackup, background 
     res.cookie(SESSION_COOKIE, token, { ...cookieOptions, maxAge: sessionTtlMs });
     res.json({ authenticated: true, csrfToken: generateToken(req) });
   });
-  app.post('/api/logout', requireAuth, protectCsrf, requireIntent, (req, res) => {
+  app.post('/api/logout', mutationLimit, requireAuth, protectCsrf, requireIntent, (req, res) => {
     sessions.delete(req.backupSessionKey);
     res.clearCookie(SESSION_COOKIE, cookieOptions);
     res.sendStatus(204);
   });
   app.get('/api/backup', requireAuth, (_req, res) => res.set('Allow', 'POST').status(405).json({ error: 'Use POST with X-Backup-Request: 1' }));
-  app.post('/api/backup', requireAuth, protectCsrf, requireIntent, async (req, res) => {
+  app.post('/api/backup', mutationLimit, requireAuth, protectCsrf, requireIntent, async (req, res) => {
     if (active) return res.status(409).json({ error: 'A backup is already running' });
     while (jobs.size >= 20) jobs.delete(jobs.keys().next().value);
     const id = randomUUID(), job = { owner: req.backupSessionKey, status: 'running' };

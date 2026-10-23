@@ -149,3 +149,14 @@ test('mutating requests require the initiating session CSRF token', async t => {
   assert.equal((await f.request('/api/backup', { method: 'POST', headers: { Cookie: first.cookie, ...intent } })).status, 200);
   assert.equal(f.calls(), 1);
 });
+
+
+test('backup and logout attempts share a bounded mutation rate', async t => {
+  const f = await fixture(t);
+  for (let i = 0; i < 30; i++) {
+    const response = await f.request(i % 2 ? '/api/logout' : '/api/backup', { method: 'POST', headers: intent });
+    assert.equal(response.status, 401);
+  }
+  assert.equal((await f.request('/api/backup', { method: 'POST', headers: intent })).status, 429);
+  assert.equal(f.calls(), 0);
+});

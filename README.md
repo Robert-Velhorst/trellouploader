@@ -30,7 +30,7 @@ remove historical Git data or establish whether any old credential was used live
 - `POST /api/backup` requires that session, `X-Backup-Request: 1`, and the login response token in `X-CSRF-Token`. Browser
   Origin must match `PUBLIC_URL`; non-browser clients may omit Origin. The legacy
   GET operation returns 405 after authentication and never starts a backup.
-- Only one backup may run at a time. A competing request returns 409.
+- Backup/logout requests share a limit of 30 per minute. Only one backup may run at a time. A competing request returns 409.
 - `GET /api/backup/:jobId` returns only the initiating session's job state.
   States are `running`, `completed` and `failed`; completed jobs include the
   private Drive URL. Up to 20 job records remain in memory.
