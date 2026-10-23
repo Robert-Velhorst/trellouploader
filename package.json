@@ -23,6 +23,6 @@
   "devDependencies": {},
   "packageManager": "npm@12.2.1",
   "engines": {
-    "node": "^24.22.0 || ^26.12.0"
+    "node": "^24.22.1 || ^26.12.1"
   }
 }
