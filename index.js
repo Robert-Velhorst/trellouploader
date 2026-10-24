@@ -1,19 +1,9 @@
+import { createBackupApp } from './backup-app.js';
+import { uploadCsvBackup } from './drive-backup.js';
 import 'dotenv/config';
-import express from 'express';
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
 import Bottleneck from 'bottleneck';
-import { google } from 'googleapis';
-import { Parser } from 'json2csv';
-import cookieParser from 'cookie-parser';
 
-const app = express();
-
-// Middleware’ler
-app.use(express.json());
-app.use(cookieParser());
-app.use(express.static('public'));
 
 /* ============================================================
  *  🔹 0. YARDIMCI: SONSUZ RETRY (429 → 10sn bekle)
@@ -37,30 +27,6 @@ async function retryForever(fn, delayMs = 10000) {
 /* ============================================================
  *  🔹 1. GOOGLE DRIVE AUTH (ENV TOKEN)
  * ============================================================ */
-async function getDriveAuth() {
-  const {
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI,
-    GOOGLE_TOKEN_JSON
-  } = process.env;
-
-  if (!GOOGLE_TOKEN_JSON) {
-    throw new Error('GOOGLE_TOKEN_JSON missing');
-  }
-
-  const oAuth2Client = new google.auth.OAuth2(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI
-  );
-
-  const token = JSON.parse(GOOGLE_TOKEN_JSON);
-  oAuth2Client.setCredentials(token);
-
-  return oAuth2Client;
-}
-
 /* ============================================================
  *  🔹 2. TRELLO VERİLERİNİ ÇEK (%0 VERİ KAYBI)
  * ============================================================ */
@@ -218,66 +184,13 @@ async function fetchTrelloData() {
 /* ============================================================
  *  🔹 3. CSV + DRIVE
  * ============================================================ */
-async function saveToCSVAndUpload(data) {
-  const date = new Date().toISOString().split('T')[0];
-  const filePath = path.join(process.cwd(), `trello_export_${date}.csv`);
-
-  const parser = new Parser();
-  fs.writeFileSync(filePath, parser.parse(data));
-
-  const auth = await getDriveAuth();
-  const drive = google.drive({ version: 'v3', auth });
-
-  const res = await drive.files.create({
-    requestBody: {
-      name: path.basename(filePath),
-      parents: [process.env.GOOGLE_FOLDER_ID]
-    },
-    media: {
-      mimeType: 'text/csv',
-      body: fs.createReadStream(filePath)
-    }
-  });
-
-  fs.unlinkSync(filePath);
-  return `https://drive.google.com/file/d/${res.data.id}`;
-}
-
-/* ============================================================
- *  🔹 4. AUTH + BACKGROUND ENDPOINT
- * ============================================================ */
-const APP_PASSWORD = process.env.APP_PASSWORD || '1234';
-
-app.post('/api/login', (req, res) => {
-  if (req.body.password === APP_PASSWORD) {
-    res.cookie('auth', 'ok', { httpOnly: true, sameSite: 'lax', secure: true });
-    return res.send('OK');
-  }
-  res.status(401).send('Unauthorized');
+const app = createBackupApp({
+  password: process.env.APP_PASSWORD,
+  publicOrigin: process.env.PUBLIC_URL,
+  background: true,
+  runBackup: async () => uploadCsvBackup(await fetchTrelloData()),
 });
-
-function requireAuth(req, res, next) {
-  if (req.cookies?.auth === 'ok') return next();
-  res.status(401).send('Unauthorized');
-}
-
-app.get('/api/backup', requireAuth, (req, res) => {
-  res.json({ success: true, message: 'Backup started in background' });
-
-  setImmediate(async () => {
-    try {
-      console.log('🟡 Backup started (background)');
-      const data = await fetchTrelloData();
-      const url = await saveToCSVAndUpload(data);
-      console.log('✅ Backup finished:', url);
-    } catch (err) {
-      console.error('❌ Backup FAILED (KRİTİK):', err.message);
-    }
-  });
-});
-
-/* ============================================================
- *  🔹 5. SERVER
- * ============================================================ */
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const port = Number(process.env.PORT || 3000);
+if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be a valid TCP port');
+const host = process.env.HOST || '127.0.0.1';
+app.listen(port, host, () => console.log(`Backup service listening on ${host}:${port}`));
