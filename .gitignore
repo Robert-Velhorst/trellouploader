@@ -1,0 +1,8 @@
+/node_modules/
+/.env
+/.env.*
+!/.env.example
+/token.json
+/tokens.json
+/trello_export_*.csv
+/coverage/
